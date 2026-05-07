@@ -4,18 +4,23 @@
 
 package first.robot;
 
+import org.wpilib.command3.Command;
 import org.wpilib.command3.Scheduler;
 import org.wpilib.command3.Trigger;
 import org.wpilib.driverstation.Gamepad;
 import org.wpilib.framework.TimedRobot;
 import org.wpilib.hardware.accelerometer.ADXL345_I2C;
+import org.wpilib.hardware.bus.I2C;
 import org.wpilib.hardware.expansionhub.ExpansionHubMotor;
 import org.wpilib.hardware.expansionhub.ExpansionHubServo;
 import org.wpilib.hardware.imu.OnboardIMU;
 import org.wpilib.hardware.imu.OnboardIMU.MountOrientation;
+import org.wpilib.math.geometry.Pose2d;
 import org.wpilib.smartdashboard.SendableChooser;
 import org.wpilib.smartdashboard.SmartDashboard;
+import org.wpilib.util.sendable.SendableRegistry;
 
+import first.robot.driver.GoBildaPinpointDriver;
 import first.robot.mechanism.MecanumMechanism;
 
 /**
@@ -24,11 +29,6 @@ import first.robot.mechanism.MecanumMechanism;
  * this project, you must also update the Main.java file in the project.
  */
 public class Robot extends TimedRobot {
-  private static final String kDefaultAuto = "Default";
-  private static final String kCustomAuto = "My Auto";
-  private String autoSelected;
-  private final SendableChooser<String> chooser = new SendableChooser<>();
-
   ExpansionHubMotor frontLeft = new ExpansionHubMotor(0, 0);
   ExpansionHubMotor rearLeft = new ExpansionHubMotor(0, 1);
   ExpansionHubMotor frontRight = new ExpansionHubMotor(0, 2);
@@ -36,9 +36,9 @@ public class Robot extends TimedRobot {
 
   ExpansionHubServo claw = new ExpansionHubServo(0, 0);
 
-  OnboardIMU imu = new OnboardIMU(MountOrientation.FLAT);
+  GoBildaPinpointDriver pinpoint = new GoBildaPinpointDriver(I2C.Port.PORT_0);
 
-  MecanumMechanism mecanumSubsystem = new MecanumMechanism(frontLeft, rearLeft, frontRight, rearRight, imu);
+  MecanumMechanism mecanumMechanism = new MecanumMechanism(frontLeft, rearLeft, frontRight, rearRight, pinpoint);
 
   Gamepad gamepad1 = new Gamepad(0);
 
@@ -55,9 +55,7 @@ public class Robot extends TimedRobot {
     frontRight.setFloatOn0(false);
     rearRight.setFloatOn0(false);
 
-    chooser.setDefaultOption("Default Auto", kDefaultAuto);
-    chooser.addOption("My Auto", kCustomAuto);
-    SmartDashboard.putData("Auto choices", chooser);
+    SendableRegistry.add(mecanumMechanism, "MecanumMechanism");
   }
 
   /**
@@ -84,41 +82,28 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void autonomousInit() {
-    autoSelected = chooser.getSelected();
-    // autoSelected = SmartDashboard.getString("Auto Selector", kDefaultAuto);
-    System.out.println("Auto selected: " + autoSelected);
   }
 
   /** This function is called periodically during autonomous. */
   @Override
   public void autonomousPeriodic() {
-    switch (autoSelected) {
-      case kCustomAuto:
-        // Put custom auto code here
-        break;
-      case kDefaultAuto:
-      default:
-        // Put default auto code here
-        break;
-    }
   }
 
   /** This function is called once when teleop is enabled. */
   @Override
   public void teleopInit() {
-    Scheduler.getDefault().schedule(mecanumSubsystem.driveCartesianCmd(gamepad1, true));
+    Scheduler.getDefault().schedule(mecanumMechanism.driveCartesianCmd(gamepad1, true));
 
-    // Trigger resetFieldCentricTrigger = new Trigger(() -> gamepad1.getDpadUpButton());
-    // resetFieldCentricTrigger.onTrue(mecanumSubsystem.resetYawCmd());
+    Trigger resetFieldCentricTrigger = new Trigger(() -> gamepad1.getDpadUpButton());
+
+    resetFieldCentricTrigger.onTrue(mecanumMechanism.run(co -> {
+      mecanumMechanism.setPose(new Pose2d());
+    }).named("ResetPoseCmd"));
   }
 
   /** This function is called periodically during operator control. */
   @Override
-  public void teleopPeriodic() {
-    if(gamepad1.getDpadUpButtonPressed()) {
-      imu.resetYaw();
-    }
-  }
+  public void teleopPeriodic() { }
 
   /** This function is called once when the robot is disabled. */
   @Override
